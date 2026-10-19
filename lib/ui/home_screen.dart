@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../engines/engines.dart';
-import 'result_card.dart';
+import '../services/to_kannada.dart';
+import 'speak_view.dart';
+import 'type_view.dart';
 
 enum Mode { type, speak, scan }
 
@@ -12,18 +14,30 @@ class HomeScreen extends StatefulWidget {
     required this.translator,
     required this.tts,
     required this.romanizer,
+    required this.speech,
   });
 
   final Translator translator;
   final TextToSpeech tts;
   final Romanizer romanizer;
+  final SpeechToText speech;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late final ToKannada _toKannada = ToKannada(widget.translator);
   Mode _mode = Mode.type;
+  bool? _voiceInstalled; // checked once, shared by all modes
+
+  @override
+  void initState() {
+    super.initState();
+    widget.tts.isAvailable('kn').then((ok) {
+      if (mounted) setState(() => _voiceInstalled = ok);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +66,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: Text('Scan')),
                 ],
                 selected: {_mode},
-                onSelectionChanged: (s) => setState(() => _mode = s.first),
+                onSelectionChanged: (s) {
+                  widget.tts.stop();
+                  setState(() => _mode = s.first);
+                },
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -61,13 +78,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   index: _mode.index,
                   children: [
                     TypeView(
-                      translator: widget.translator,
+                      toKannada: _toKannada,
                       tts: widget.tts,
                       romanizer: widget.romanizer,
+                      voiceInstalled: _voiceInstalled,
                     ),
-                    const _ComingSoon(
-                        icon: Icons.mic,
-                        text: 'Speak mode arrives in Phase 2.'),
+                    SpeakView(
+                      speech: widget.speech,
+                      toKannada: _toKannada,
+                      tts: widget.tts,
+                      romanizer: widget.romanizer,
+                      voiceInstalled: _voiceInstalled,
+                      active: _mode == Mode.speak,
+                    ),
                     const _ComingSoon(
                         icon: Icons.camera_alt,
                         text: 'Scan mode arrives in Phase 3.'),
@@ -78,142 +101,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Type English or Hindi, get Kannada you can read and hear.
-class TypeView extends StatefulWidget {
-  const TypeView({
-    super.key,
-    required this.translator,
-    required this.tts,
-    required this.romanizer,
-  });
-
-  final Translator translator;
-  final TextToSpeech tts;
-  final Romanizer romanizer;
-
-  @override
-  State<TypeView> createState() => _TypeViewState();
-}
-
-class _TypeViewState extends State<TypeView> {
-  final _controller = TextEditingController();
-  final Map<String, String> _cache = {}; // "from|text" -> Kannada
-
-  String _from = 'en';
-  bool _busy = false;
-  bool? _voiceInstalled; // null until checked
-  String? _kannada;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.tts.isAvailable('kn').then((ok) {
-      if (mounted) setState(() => _voiceInstalled = ok);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _translate() async {
-    final input = _controller.text.trim();
-    if (input.isEmpty || _busy) return;
-    FocusScope.of(context).unfocus();
-
-    final key = '$_from|$input';
-    final cached = _cache[key];
-    if (cached != null) {
-      setState(() {
-        _kannada = cached;
-        _error = null;
-      });
-      return;
-    }
-
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final result = await widget.translator.translate(input, _from, 'kn');
-      _cache[key] = result;
-      if (mounted) setState(() => _kannada = result);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Could not translate: $e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final kannada = _kannada;
-    return ListView(
-      children: [
-        Row(
-          children: [
-            Text('From', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(width: 12),
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: 'en', label: Text('English')),
-                ButtonSegment(value: 'hi', label: Text('हिंदी')),
-              ],
-              selected: {_from},
-              onSelectionChanged: (s) => setState(() => _from = s.first),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _controller,
-          minLines: 1,
-          maxLines: 4,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _translate(),
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            hintText:
-                _from == 'en' ? 'How much is this?' : 'यह कितने का है?',
-          ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _busy ? null : _translate,
-          icon: _busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.translate),
-          label: const Text('To Kannada'),
-        ),
-        const SizedBox(height: 16),
-        if (_error != null)
-          Text(_error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)),
-        if (kannada != null && kannada.isNotEmpty)
-          ResultCard(
-            romanized: widget.romanizer.toLatin(kannada),
-            kannada: kannada,
-            onPlay: _voiceInstalled == false
-                ? null
-                : () => widget.tts.speak(kannada, 'kn'),
-            audioHint: _voiceInstalled == false
-                ? 'No Kannada voice found. Install it once in your phone\'s '
-                    'text-to-speech settings to hear this.'
-                : null,
-          ),
-      ],
     );
   }
 }

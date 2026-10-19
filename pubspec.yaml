@@ -13,6 +13,8 @@ dependencies:
   google_mlkit_translation: ^0.15.1
   # Android system text-to-speech, used for Kannada audio.
   flutter_tts: ^4.2.5
+  # Phone's built-in speech recognizer, used for Speak mode.
+  speech_to_text: ^7.5.0
 
 dev_dependencies:
   flutter_test:

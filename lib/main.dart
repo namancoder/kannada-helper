@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'engines/engines.dart';
 import 'engines/kannada_romanizer.dart';
 import 'engines/mlkit_translator.dart';
+import 'engines/platform_speech_to_text.dart';
 import 'engines/system_tts.dart';
 import 'services/language_packs.dart';
 import 'ui/home_screen.dart';
@@ -15,6 +16,7 @@ void main() {
     tts: SystemTts(),
     romanizer: const KannadaRomanizer(),
     packs: LanguagePacks(),
+    speech: PlatformSpeechToText(),
   ));
 }
 
@@ -25,12 +27,14 @@ class KannadaHelperApp extends StatefulWidget {
     required this.tts,
     required this.romanizer,
     required this.packs,
+    required this.speech,
   });
 
   final Translator translator;
   final TextToSpeech tts;
   final Romanizer romanizer;
   final LanguagePacks packs;
+  final SpeechToText speech;
 
   @override
   State<KannadaHelperApp> createState() => _KannadaHelperAppState();
@@ -60,6 +64,7 @@ class _KannadaHelperAppState extends State<KannadaHelperApp> {
   void dispose() {
     widget.translator.dispose();
     widget.tts.stop();
+    widget.speech.stop();
     super.dispose();
   }
 
@@ -75,6 +80,7 @@ class _KannadaHelperAppState extends State<KannadaHelperApp> {
           translator: widget.translator,
           tts: widget.tts,
           romanizer: widget.romanizer,
+          speech: widget.speech,
         ),
     };
 

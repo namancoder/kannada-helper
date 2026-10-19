@@ -9,10 +9,39 @@ abstract class Ocr {
   Future<String> read(Uint8List image);
 }
 
+/// One piece of recognized speech.
+class Transcript {
+  const Transcript(this.text, {this.isFinal = false});
+
+  final String text;
+
+  /// True once the recognizer has settled on this text.
+  final bool isFinal;
+}
+
+/// Something went wrong while listening (no permission, no speech, ...).
+class SpeechException implements Exception {
+  const SpeechException(this.code, {this.permanent = true});
+
+  /// Engine error code, e.g. 'error_no_match', 'error_permission'.
+  final String code;
+  final bool permanent;
+
+  @override
+  String toString() => 'SpeechException($code)';
+}
+
 /// Turns speech into text. (Phase 2: `speech_to_text`, later Vosk.)
 abstract class SpeechToText {
-  /// Emits partial and final transcripts while listening.
-  Stream<String> listen(String lang);
+  /// Prepares the engine and asks for mic permission the first time.
+  /// Returns false if speech recognition can't be used.
+  Future<bool> initialize();
+
+  /// Starts one listening session. Emits partial transcripts, then a final
+  /// one, then closes. Errors arrive as [SpeechException] on the stream.
+  Stream<Transcript> listen(String lang);
+
+  /// Stops listening early; whatever was heard is still delivered.
   Future<void> stop();
 }
 

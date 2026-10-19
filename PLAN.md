@@ -110,19 +110,19 @@ Aim for **casual readable spelling** ("namaskara", "yeshtu"), not academic trans
 ### Phase 0: Setup (½ day)
 - [ ] `flutter create kannada_helper`, run on your phone
 - [ ] Install the Kannada voice in Android TTS settings; test `flutter_tts` speaking "ನಮಸ್ಕಾರ"
-- [ ] Define the 5 interfaces from §2
+- [x] Define the 5 interfaces from §2
 
 ### Phase 1: Type mode on v1 engines (1 day): **first usable app**
-- [ ] ML Kit translator: pre-download `en`, `kn`, `hi` models
-- [ ] Screen: text field, EN/HI toggle, result card with:
+- [x] ML Kit translator: pre-download `en`, `kn`, `hi` models
+- [x] Screen: text field, EN/HI toggle, result card with:
   - Romanized Kannada (**big**, since that's what you'll actually read)
   - Kannada script (small)
   - ▶️ play button
-- [ ] Romanizer + unit tests
+- [x] Romanizer + unit tests
 
 ### Phase 2: Speak mode (½–1 day)
-- [ ] Mic button → `speech_to_text` (`en_IN` / `hi_IN`) → fill the field → auto-translate
-- [ ] Handle mic permission denial and silence timeouts
+- [x] Mic button → `speech_to_text` (`en_IN` / `hi_IN`) → fill the field → auto-translate
+- [x] Handle mic permission denial and silence timeouts
 
 ### Phase 3: Scan mode (2–3 days, the hard part)
 - [ ] Full-screen camera with a centered scan box
