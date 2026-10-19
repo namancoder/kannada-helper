@@ -1,0 +1,22 @@
+name: kannada_helper
+description: Personal offline app to understand and speak basic Kannada.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # On-device translation (v1 engine). Free, offline after model download.
+  google_mlkit_translation: ^0.15.1
+  # Android system text-to-speech, used for Kannada audio.
+  flutter_tts: ^4.2.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
