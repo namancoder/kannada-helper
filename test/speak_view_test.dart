@@ -160,6 +160,35 @@ void main() {
     expect(speech.stops, 1);
   });
 
+  testWidgets('a misheard word can be fixed and translated again',
+      (tester) async {
+    await tester.pumpWidget(app());
+    await tester.tap(find.byKey(const Key('mic')));
+    await tester.pump();
+    speech.session!.add(const Transcript('how much is dish', isFinal: true));
+    await speech.session!.close();
+    await tester.pumpAndSettle();
+
+    expect(translator.calls, ['en>kn:how much is dish']);
+    final field = find.byKey(const Key('heard'));
+    expect(field, findsOneWidget);
+    expect(find.text('how much is dish'), findsOneWidget);
+
+    // Unchanged text: nothing to re-translate yet.
+    IconButton retry() =>
+        tester.widget<IconButton>(find.byKey(const Key('retranslate')));
+    expect(retry().onPressed, isNull);
+
+    await tester.enterText(field, 'how much is this');
+    await tester.pump();
+    expect(retry().onPressed, isNotNull);
+
+    await tester.tap(find.byKey(const Key('retranslate')));
+    await tester.pumpAndSettle();
+    expect(translator.calls, ['en>kn:how much is dish', 'en>kn:how much is this']);
+    expect(retry().onPressed, isNull, reason: 'result now matches the text');
+  });
+
   test('error codes map to helpful messages', () {
     String msg(String code) => speechErrorMessage(SpeechException(code));
     expect(msg('error_permission'), contains('microphone'));

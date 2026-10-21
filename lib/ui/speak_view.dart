@@ -35,6 +35,13 @@ class SpeakView extends StatefulWidget {
 class _SpeakViewState extends State<SpeakView> with WidgetsBindingObserver {
   StreamSubscription<Transcript>? _session;
 
+  /// Holds what was heard once listening ends, so a misheard word can be
+  /// fixed by hand and translated again.
+  final _editor = TextEditingController();
+
+  /// The exact text the current Kannada result came from.
+  String _translatedFrom = '';
+
   String _from = 'en';
   bool _listening = false;
   bool _translating = false;
@@ -67,6 +74,7 @@ class _SpeakViewState extends State<SpeakView> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _session?.cancel();
     if (_listening) widget.speech.stop();
+    _editor.dispose();
     super.dispose();
   }
 
@@ -97,6 +105,8 @@ class _SpeakViewState extends State<SpeakView> with WidgetsBindingObserver {
       _heard = '';
       _kannada = null;
       _error = null;
+      _translatedFrom = '';
+      _editor.clear();
     });
 
     await _session?.cancel();
@@ -111,20 +121,28 @@ class _SpeakViewState extends State<SpeakView> with WidgetsBindingObserver {
         setState(() => _error = speechErrorMessage(e));
       },
       onDone: () {
-        if (mounted) setState(() => _listening = false);
+        if (!mounted) return;
+        setState(() {
+          _listening = false;
+          // Hand the transcript to the editable field.
+          if (_editor.text.isEmpty) _editor.text = latest.trim();
+        });
         handle(latest);
       },
     );
   }
 
   Future<void> _translate(String text, String from) async {
-    if (!mounted) return;
+    final input = text.trim();
+    if (!mounted || input.isEmpty) return;
     setState(() {
       _translating = true;
       _error = null;
+      _translatedFrom = input;
+      if (_editor.text.trim() != input) _editor.text = input;
     });
     try {
-      final kannada = await widget.toKannada(text, from);
+      final kannada = await widget.toKannada(input, from);
       if (!mounted) return;
       setState(() => _kannada = kannada);
       if (_autoPlay && widget.voiceInstalled != false && kannada.isNotEmpty) {
@@ -135,6 +153,46 @@ class _SpeakViewState extends State<SpeakView> with WidgetsBindingObserver {
     } finally {
       if (mounted) setState(() => _translating = false);
     }
+  }
+
+  /// Re-translates whatever is in the editor now.
+  void _retranslate() {
+    FocusScope.of(context).unfocus();
+    _translate(_editor.text, _from);
+  }
+
+  /// What was heard, editable. The ↻ button lights up once it's changed.
+  Widget _buildEditor() {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _editor,
+      builder: (context, value, _) {
+        // Enabled after an edit, or to retry a translation that failed.
+        final changed = value.text.trim().isNotEmpty &&
+            (value.text.trim() != _translatedFrom || _error != null);
+        return TextField(
+          key: const Key('heard'),
+          controller: _editor,
+          minLines: 1,
+          maxLines: 4,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _retranslate(),
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            labelText: 'What you said',
+            helperText: changed
+                ? 'Tap ↻ to translate your edit'
+                : 'Heard a word wrong? Tap to fix it',
+            suffixIcon: IconButton(
+              key: const Key('retranslate'),
+              tooltip: 'Translate again',
+              icon: const Icon(Icons.refresh),
+              color: changed ? Theme.of(context).colorScheme.primary : null,
+              onPressed: changed && !_translating ? _retranslate : null,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -176,12 +234,13 @@ class _SpeakViewState extends State<SpeakView> with WidgetsBindingObserver {
           style: text.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
-        if (_heard.isNotEmpty)
+        if (_listening && _heard.isNotEmpty)
           Text(
             '“$_heard”',
             textAlign: TextAlign.center,
             style: text.titleMedium?.copyWith(fontStyle: FontStyle.italic),
           ),
+        if (!_listening && _translatedFrom.isNotEmpty) _buildEditor(),
         if (_translating) ...[
           const SizedBox(height: 12),
           const LinearProgressIndicator(),
