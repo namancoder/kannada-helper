@@ -14,7 +14,17 @@ abstract class Ocr {
   Future<void> prepare({void Function(int received, int? total)? onProgress});
 
   /// Returns the text found in [image], an encoded PNG or JPEG.
-  Future<String> read(Uint8List image);
+  Future<OcrResult> read(Uint8List image);
+}
+
+/// Text from OCR plus how sure the engine is (0-100).
+class OcrResult {
+  const OcrResult(this.text, this.confidence);
+
+  final String text;
+
+  /// Mean word confidence. Random shapes read as letters score low.
+  final int confidence;
 }
 
 /// One piece of recognized speech.

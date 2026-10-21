@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
  *
  * Dart (lib/engines/tesseract_ocr.dart) calls channel "kannada_helper/ocr":
  *  - dataDir -> folder that holds tessdata/kan.traineddata
- *  - read {path, lang, psm} -> text found in the image file
+ *  - read {path, lang, psm} -> {text, confidence 0-100} for the image file
  *
  * Uses Tesseract4Android (cz.adaptech.tesseract4android). OCR runs on one
  * background thread; the engine is created once and reused.
@@ -47,8 +47,11 @@ class MainActivity : FlutterActivity() {
                                     api.setPageSegMode(psm)
                                     api.setImage(File(path))
                                     val text = api.getUTF8Text() ?: ""
+                                    val confidence = api.meanConfidence()
                                     api.clear()
-                                    mainThread.post { result.success(text) }
+                                    mainThread.post {
+                                        result.success(mapOf("text" to text, "confidence" to confidence))
+                                    }
                                 } catch (e: Exception) {
                                     mainThread.post { result.error("OCR_FAILED", e.message, null) }
                                 }

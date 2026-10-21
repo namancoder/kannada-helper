@@ -87,15 +87,18 @@ class TesseractOcr implements Ocr {
   }
 
   @override
-  Future<String> read(Uint8List image) async {
+  Future<OcrResult> read(Uint8List image) async {
     _slot = 1 - _slot;
     final file = File('${Directory.systemTemp.path}/kh_scan_$_slot.png');
     await file.writeAsBytes(image, flush: true);
-    final text = await _channel.invokeMethod<String>('read', {
+    final result = await _channel.invokeMapMethod<String, Object?>('read', {
       'path': file.path,
       'lang': _language,
       'psm': _psmSingleBlock,
     });
-    return text ?? '';
+    return OcrResult(
+      (result?['text'] as String?) ?? '',
+      (result?['confidence'] as int?) ?? 0,
+    );
   }
 }

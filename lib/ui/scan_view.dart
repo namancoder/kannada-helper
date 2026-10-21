@@ -47,6 +47,11 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   static const _drawBox = ScanBox(widthFraction: 0.84, heightFraction: 0.24);
   static const _interval = Duration(milliseconds: 1000);
 
+  /// Tesseract mean confidence (0-100) needed to trust a read. Random shapes
+  /// forced into Kannada letters usually score well below these.
+  static const _minLiveConfidence = 60;
+  static const _minFrozenConfidence = 45;
+
   _Stage _stage = _Stage.checking;
   CameraController? _camera;
   String? _error;
@@ -59,6 +64,15 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   int _generation = 0; // bumps on every start/stop so stale work is ignored
 
   String _lastText = '';
+
+  /// Live reads must match twice in a row before they count; OCR noise
+  /// changes every frame, real text doesn't.
+  String _candidate = '';
+
+  // Debug builds only: what Tesseract actually saw and said.
+  Uint8List? _debugPng;
+  String _debugRaw = '';
+  int _debugConfidence = 0;
   String? _kannada;
   ({String en, String hi})? _meaning;
 
@@ -227,16 +241,35 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     try {
       final png = await makePng();
       if (png == null || gen != _generation) return;
-      final text = cleanKannada(await widget.ocr.read(png));
+      final ocr = await widget.ocr.read(png);
       if (!mounted || gen != _generation) return;
+      if (kDebugMode) {
+        setState(() {
+          _debugPng = png;
+          _debugRaw = ocr.text.trim().replaceAll('\n', ' ⏎ ');
+          _debugConfidence = ocr.confidence;
+        });
+      }
       if (live && _frozen) return; // a freeze started meanwhile
 
-      if (kannadaLetterCount(text) < 3) {
-        // Nothing readable. Keep showing the last good result (no flicker).
-        if (!live) setState(() => _error = 'No Kannada text found in the box.');
+      final text = cleanKannada(ocr.text);
+      final minConfidence = live ? _minLiveConfidence : _minFrozenConfidence;
+      if (kannadaLetterCount(text) < 3 || ocr.confidence < minConfidence) {
+        // Nothing trustworthy. Keep the last good result on screen (no flicker).
+        _candidate = '';
+        if (!live) {
+          setState(() => _error = "Couldn't read that clearly. Fill the box "
+              'with the text, hold steady and try Freeze again.');
+        }
         return;
       }
-      if (text == _lastText && live) return;
+      if (live) {
+        if (text != _candidate) {
+          _candidate = text; // wait for the next frame to confirm
+          return;
+        }
+        if (text == _lastText) return;
+      }
 
       final meaning = await widget.fromKannada(text);
       if (!mounted || gen != _generation) return;
@@ -264,6 +297,7 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
       setState(() {
         _frozen = false;
         _error = null;
+        _candidate = '';
       });
       await camera.resumePreview();
       if (!camera.value.isStreamingImages) {
@@ -430,6 +464,15 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
           const SizedBox(height: 4),
           Text(_error!, style: TextStyle(color: colors.error)),
         ],
+        if (kDebugMode && _debugPng != null) ...[
+          const SizedBox(height: 6),
+          _DebugStrip(
+            png: _debugPng!,
+            raw: _debugRaw,
+            confidence: _debugConfidence,
+            threshold: _frozen ? _minFrozenConfidence : _minLiveConfidence,
+          ),
+        ],
         const SizedBox(height: 8),
         Expanded(
           flex: 4,
@@ -532,6 +575,54 @@ class _Meaning extends StatelessWidget {
                 : theme.titleMedium,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Debug builds only: the exact image sent to OCR, its raw output and score.
+/// If the picture looks sideways, mirrored or blurry, that's the problem.
+class _DebugStrip extends StatelessWidget {
+  const _DebugStrip({
+    required this.png,
+    required this.raw,
+    required this.confidence,
+    required this.threshold,
+  });
+
+  final Uint8List png;
+  final String raw;
+  final int confidence;
+  final int threshold;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final ok = confidence >= threshold;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.memory(png, height: 56, gaplessPlayback: true),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'DEBUG  confidence $confidence/$threshold ${ok ? '✓' : '✗'}\n'
+                '${raw.isEmpty ? '(no text)' : raw}',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: ok ? colors.onSurface : colors.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
