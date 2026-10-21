@@ -14,11 +14,11 @@ class FromKannada {
     final cached = _cache[input];
     if (cached != null) return cached;
 
-    final results = await Future.wait([
-      translator.translate(input, 'kn', 'en'),
-      translator.translate(input, 'kn', 'hi'),
-    ]);
-    final result = (en: results[0], hi: results[1]);
+    // One after the other on purpose: ML Kit can crash when two translators
+    // start up at the same time.
+    final en = await translator.translate(input, 'kn', 'en');
+    final hi = await translator.translate(input, 'kn', 'hi');
+    final result = (en: en, hi: hi);
     _cache[input] = result;
     return result;
   }
