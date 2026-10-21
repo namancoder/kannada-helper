@@ -60,6 +60,13 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
   bool _busy = false; // a frame is being processed
   bool _frozen = false;
   bool _torch = false;
+
+  // Zoom: pinch on the preview or tap the 1x / 2x / 4x chips.
+  double _zoom = 1;
+  double _minZoom = 1;
+  double _maxZoom = 1;
+  double _pinchStartZoom = 1;
+  static const _zoomCap = 8.0; // beyond this digital zoom is just mush
   DateTime _lastFrame = DateTime.fromMillisecondsSinceEpoch(0);
   int _generation = 0; // bumps on every start/stop so stale work is ignored
 
@@ -174,9 +181,22 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
         await controller.dispose();
         return;
       }
+      try {
+        _minZoom = await controller.getMinZoomLevel();
+        final max = await controller.getMaxZoomLevel();
+        _maxZoom = max < _minZoom ? _minZoom : (max > _zoomCap ? _zoomCap : max);
+      } on CameraException {
+        _minZoom = _maxZoom = 1; // zoom not supported
+      }
+      if (!mounted || gen != _generation) {
+        await controller.dispose();
+        return;
+      }
       _camera = controller;
       _frozen = false;
       _torch = false;
+      // Cameras start at 1x (some phones allow below 1x for ultra-wide).
+      _zoom = _minZoom > 1 ? _minZoom : (_maxZoom < 1 ? _maxZoom : 1);
       setState(() => _stage = _Stage.live);
       await controller.startImageStream(_onFrame);
     } on CameraException catch (e) {
@@ -326,6 +346,37 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
     }
   }
 
+  bool _zoomBusy = false;
+  double? _zoomPending;
+
+  /// Applies [level] (clamped). Pinch fires many updates; only the latest
+  /// one is sent while the camera is still busy with the previous one.
+  Future<void> _setZoom(double level) async {
+    final camera = _camera;
+    if (camera == null || _maxZoom <= _minZoom) return;
+    final z = level.clamp(_minZoom, _maxZoom).toDouble();
+    if (mounted) setState(() => _zoom = z);
+    if (_zoomBusy) {
+      _zoomPending = z;
+      return;
+    }
+    _zoomBusy = true;
+    try {
+      var next = z;
+      while (true) {
+        await camera.setZoomLevel(next);
+        final pending = _zoomPending;
+        _zoomPending = null;
+        if (pending == null || pending == next) break;
+        next = pending;
+      }
+    } on CameraException {
+      // Ignore: zoom is a nice-to-have.
+    } finally {
+      _zoomBusy = false;
+    }
+  }
+
   Future<void> _toggleTorch() async {
     final camera = _camera;
     if (camera == null) return;
@@ -418,27 +469,8 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          flex: 5,
-          child: Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  CameraPreview(camera),
-                  const Positioned.fill(child: _ScanBoxOverlay(box: _drawBox)),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: IconButton.filledTonal(
-                      tooltip: _torch ? 'Torch off' : 'Torch on',
-                      icon: Icon(_torch ? Icons.flash_on : Icons.flash_off),
-                      onPressed: _toggleTorch,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          flex: 3,
+          child: _buildPreview(camera),
         ),
         const SizedBox(height: 8),
         Row(
@@ -475,7 +507,7 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
         ],
         const SizedBox(height: 8),
         Expanded(
-          flex: 4,
+          flex: 2,
           child: kannada == null || meaning == null
               ? Center(
                   child: Text('The meaning will show here.',
@@ -497,6 +529,126 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
                 ),
         ),
       ],
+    );
+  }
+}
+
+extension on _ScanViewState {
+  /// Camera preview that fills its area (cropping the edges, like the phone's
+  /// camera app) instead of shrinking to fit. The scan box is drawn inside the
+  /// same scaled picture, so it stays lined up with what's actually read.
+  Widget _buildPreview(CameraController camera) {
+    // previewSize is landscape (e.g. 1920x1080); the app is portrait.
+    final size = camera.value.previewSize ?? const Size(1920, 1080);
+    final portraitW = size.shortestSide;
+    final portraitH = size.longestSide;
+
+    final zoomStops = <double>[1, 2, 4]
+        .where((z) => z >= _minZoom && z <= _maxZoom)
+        .toList();
+    // Highest stop at or below the current zoom.
+    final activeStop = zoomStops.isEmpty
+        ? null
+        : zoomStops.lastWhere((z) => z <= _zoom + 0.05,
+            orElse: () => zoomStops.first);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: GestureDetector(
+        onScaleStart: (_) => _pinchStartZoom = _zoom,
+        onScaleUpdate: (d) {
+          if (d.pointerCount >= 2) _setZoom(_pinchStartZoom * d.scale);
+        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: portraitW,
+                height: portraitH,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CameraPreview(camera),
+                    const _ScanBoxOverlay(box: _ScanViewState._drawBox),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: IconButton.filledTonal(
+                tooltip: _torch ? 'Torch off' : 'Torch on',
+                icon: Icon(_torch ? Icons.flash_on : Icons.flash_off),
+                onPressed: _toggleTorch,
+              ),
+            ),
+            if (zoomStops.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 10,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final z in zoomStops)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: _ZoomChip(
+                          // The active chip shows the exact level while pinching.
+                          label: z == activeStop && !_isNear(_zoom, z)
+                              ? '${_zoom.toStringAsFixed(1)}×'
+                              : '${z.toStringAsFixed(0)}×',
+                          selected: z == activeStop,
+                          onTap: () => _setZoom(z),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static bool _isNear(double a, double b) => (a - b).abs() < 0.05;
+}
+
+/// Small round zoom button, like the phone's camera app.
+class _ZoomChip extends StatelessWidget {
+  const _ZoomChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Colors.black87 : Colors.black45,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.amberAccent : Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -527,9 +679,12 @@ class _ScanBoxPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width * box.widthFraction;
     final h = size.height * box.heightFraction;
+    // Drawn at camera resolution and scaled down on screen, so line width
+    // and corner radius are relative to the picture size.
+    final unit = size.shortestSide / 100;
     final rect = RRect.fromRectAndRadius(
       Rect.fromCenter(center: size.center(Offset.zero), width: w, height: h),
-      const Radius.circular(12),
+      Radius.circular(3 * unit),
     );
     final shade = Path()
       ..fillType = PathFillType.evenOdd
@@ -541,7 +696,7 @@ class _ScanBoxPainter extends CustomPainter {
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
+        ..strokeWidth = 0.8 * unit,
     );
   }
 
