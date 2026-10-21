@@ -1,12 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
+import 'package:flutter/services.dart';
 
 import 'engines.dart';
 
 /// v1 OCR engine: Tesseract with the Kannada model, fully on-device.
 /// (Google ML Kit can't read Kannada script, so it isn't an option here.)
+///
+/// Talks to a small native bridge in `android/.../MainActivity.kt` that wraps
+/// Tesseract4Android. (The `flutter_tesseract_ocr` plugin was dropped: its
+/// Android build uses `jcenter()`, which Gradle 9 removed.)
 ///
 /// The Kannada model (`kan.traineddata`, "fast" variant, a few MB) is
 /// downloaded once from the official tesseract-ocr GitHub repo, not bundled.
@@ -18,17 +22,24 @@ class TesseractOcr implements Ocr {
 
   final String modelUrl;
 
-  static const _modelFile = 'kan.traineddata';
+  static const _channel = MethodChannel('kannada_helper/ocr');
+  static const _language = 'kan';
+
+  /// Tesseract page mode 6: treat the box as one uniform block of text.
+  static const _psmSingleBlock = 6;
 
   /// A real model is well over this; anything smaller is a failed download.
   static const _minValidBytes = 100 * 1024;
 
   int _slot = 0; // alternate temp files so a slow read never sees a half write
 
+  /// Tesseract expects `<dataDir>/tessdata/<lang>.traineddata`.
   Future<File> _model() async {
-    final dir = Directory(await FlutterTesseractOcr.getTessdataPath());
-    if (!dir.existsSync()) await dir.create(recursive: true);
-    return File('${dir.path}/$_modelFile');
+    final dataDir = await _channel.invokeMethod<String>('dataDir');
+    if (dataDir == null) throw StateError('OCR bridge returned no data folder');
+    final tessdata = Directory('$dataDir/tessdata');
+    if (!tessdata.existsSync()) await tessdata.create(recursive: true);
+    return File('${tessdata.path}/$_language.traineddata');
   }
 
   @override
@@ -80,13 +91,11 @@ class TesseractOcr implements Ocr {
     _slot = 1 - _slot;
     final file = File('${Directory.systemTemp.path}/kh_scan_$_slot.png');
     await file.writeAsBytes(image, flush: true);
-    return FlutterTesseractOcr.extractText(
-      file.path,
-      language: 'kan',
-      args: {
-        'psm': '6', // treat the box as one uniform block of text
-        'preserve_interword_spaces': '1',
-      },
-    );
+    final text = await _channel.invokeMethod<String>('read', {
+      'path': file.path,
+      'lang': _language,
+      'psm': _psmSingleBlock,
+    });
+    return text ?? '';
   }
 }

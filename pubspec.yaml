@@ -17,8 +17,6 @@ dependencies:
   speech_to_text: ^7.5.0
   # Camera preview + frames for Scan mode (needs Android minSdk 24).
   camera: ^0.12.1
-  # Tesseract OCR; reads Kannada script on-device (ML Kit can't).
-  flutter_tesseract_ocr: ^0.4.31
   # Pure-Dart image crop/encode for the scan box.
   image: ^4.3.0
 
@@ -28,7 +26,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    # Required by flutter_tesseract_ocr. Empty on purpose: the Kannada model
-    # is downloaded at runtime instead of bloating the APK.
-    - assets/tessdata_config.json

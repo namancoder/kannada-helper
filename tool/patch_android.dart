@@ -2,8 +2,9 @@
 // entries below:
 //   dart run tool/patch_android.dart
 //
-// Adds what the app needs to android/app/src/main/AndroidManifest.xml.
-// Each entry is added only if missing, so it's safe to run any number of times.
+// Sets up android/ for the app: manifest permissions and queries, minSdk,
+// and the native OCR bridge (MainActivity.kt + Tesseract4Android).
+// Each change is made only if missing, so it's safe to run any number of times.
 import 'dart:io';
 
 const _manifestPath = 'android/app/src/main/AndroidManifest.xml';
@@ -26,9 +27,78 @@ const _queryActions = [
 /// The camera plugin needs Android 7.0 (API 24) or newer.
 const _minSdk = 24;
 
+/// Tesseract4Android, used by the native OCR bridge (Scan mode).
+const _tessDependency = 'cz.adaptech.tesseract4android:tesseract4android:4.9.0';
+
 void main() {
   _patchManifest();
   _patchMinSdk();
+  _patchOcrBridge();
+}
+
+/// Installs the native OCR bridge: JitPack repo, Tesseract4Android dependency
+/// and MainActivity.kt from tool/android/ (with the app's package name).
+void _patchOcrBridge() {
+  // 1. MainActivity.kt
+  final kotlinRoot = Directory('android/app/src/main/kotlin');
+  final activity = kotlinRoot.existsSync()
+      ? kotlinRoot
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('MainActivity.kt'))
+          .firstOrNull
+      : null;
+  if (activity == null) {
+    stderr.writeln('MainActivity.kt not found under ${kotlinRoot.path}. '
+        'Copy tool/android/MainActivity.kt there by hand.');
+  } else {
+    final existing = activity.readAsStringSync();
+    final package =
+        RegExp(r'^package\s+([\w.]+)', multiLine: true).firstMatch(existing)?.group(1);
+    if (package == null) {
+      stderr.writeln('${activity.path}: no package line found.');
+    } else {
+      final template = File('tool/android/MainActivity.kt')
+          .readAsStringSync()
+          .replaceFirst('__PACKAGE__', package);
+      if (existing != template) {
+        activity.writeAsStringSync(template);
+        stdout.writeln('Installed OCR bridge: ${activity.path}');
+      }
+    }
+  }
+
+  // 2. JitPack repository (Tesseract4Android is published there)
+  final rootGradle = File('android/build.gradle.kts');
+  if (rootGradle.existsSync()) {
+    var text = rootGradle.readAsStringSync();
+    if (!text.contains('jitpack.io')) {
+      text = text.replaceFirst(RegExp(r'allprojects\s*\{\s*repositories\s*\{'),
+          'allprojects {\n    repositories {\n        maven { url = uri("https://jitpack.io") }');
+      if (text.contains('jitpack.io')) {
+        rootGradle.writeAsStringSync(text);
+        stdout.writeln('Patched ${rootGradle.path}: + JitPack repository');
+      } else {
+        stderr.writeln('${rootGradle.path}: add maven { url = uri("https://jitpack.io") } '
+            'to allprojects.repositories by hand.');
+      }
+    }
+  } else {
+    stderr.writeln('android/build.gradle.kts not found; add the JitPack repo by hand.');
+  }
+
+  // 3. Dependency
+  final appGradle = File('android/app/build.gradle.kts');
+  if (appGradle.existsSync()) {
+    final text = appGradle.readAsStringSync();
+    if (!text.contains('tesseract4android')) {
+      appGradle.writeAsStringSync('${text.trimRight()}\n\n'
+          'dependencies {\n    implementation("$_tessDependency")\n}\n');
+      stdout.writeln('Patched ${appGradle.path}: + Tesseract4Android');
+    }
+  } else {
+    stderr.writeln('android/app/build.gradle.kts not found; add $_tessDependency by hand.');
+  }
 }
 
 /// Makes sure minSdk is at least [_minSdk] in android/app/build.gradle(.kts).

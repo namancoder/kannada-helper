@@ -23,7 +23,7 @@ cd kannada_helper
 # 1. Generate the Android platform folder (keeps the existing lib/ and test/)
 flutter create --platforms=android --project-name kannada_helper --org dev.ng .
 
-# 2. Add permissions (internet, mic, camera), TTS/speech queries and minSdk 24.
+# 2. Add permissions, TTS/speech queries, minSdk 24 and the OCR bridge.
 #    Safe to re-run; run it again after each new phase.
 dart run tool/patch_android.dart
 
@@ -78,7 +78,7 @@ lib/
     mlkit_translator.dart       v1 Translator: Google ML Kit, on-device
     system_tts.dart             v1 TextToSpeech: phone's built-in TTS
     platform_speech_to_text.dart  v1 SpeechToText: phone's recognizer
-    tesseract_ocr.dart          v1 Ocr: Tesseract `kan`, model downloaded once
+    tesseract_ocr.dart          v1 Ocr: Tesseract `kan` via a native bridge, model downloaded once
   services/
     language_packs.dart         one-time translation model download
     to_kannada.dart             shared en/hi → kn step with cache (Type, Speak)
@@ -98,10 +98,11 @@ test/
   widget_test.dart              ResultCard widget tests
   speak_view_test.dart          Speak flow with fake mic/translator/TTS
   scan_frame_test.dart          scan box crop/rotation + Kannada text cleanup
-assets/
-  tessdata_config.json          required by the OCR plugin (empty on purpose)
+tool/android/
+  MainActivity.kt               native OCR bridge (Tesseract4Android), copied
+                                into android/ by patch_android.dart
 tool/
-  patch_android.dart            AndroidManifest + minSdk patcher (re-runnable)
+  patch_android.dart            Android setup: manifest, minSdk, OCR bridge (re-runnable)
 ```
 
 **Swapping engines:** the UI only depends on the interfaces in `engines.dart`.
