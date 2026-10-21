@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../engines/engines.dart';
+import '../services/from_kannada.dart';
 import '../services/to_kannada.dart';
+import 'scan_view.dart';
 import 'speak_view.dart';
 import 'type_view.dart';
 
@@ -15,12 +17,14 @@ class HomeScreen extends StatefulWidget {
     required this.tts,
     required this.romanizer,
     required this.speech,
+    required this.ocr,
   });
 
   final Translator translator;
   final TextToSpeech tts;
   final Romanizer romanizer;
   final SpeechToText speech;
+  final Ocr ocr;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -28,6 +32,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final ToKannada _toKannada = ToKannada(widget.translator);
+  late final FromKannada _fromKannada = FromKannada(widget.translator);
   Mode _mode = Mode.type;
   bool? _voiceInstalled; // checked once, shared by all modes
 
@@ -91,37 +96,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       voiceInstalled: _voiceInstalled,
                       active: _mode == Mode.speak,
                     ),
-                    const _ComingSoon(
-                        icon: Icons.camera_alt,
-                        text: 'Scan mode arrives in Phase 3.'),
+                    ScanView(
+                      ocr: widget.ocr,
+                      fromKannada: _fromKannada,
+                      tts: widget.tts,
+                      romanizer: widget.romanizer,
+                      voiceInstalled: _voiceInstalled,
+                      active: _mode == Mode.scan,
+                    ),
                   ],
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: color),
-          const SizedBox(height: 12),
-          Text(text, style: TextStyle(color: color)),
-        ],
       ),
     );
   }

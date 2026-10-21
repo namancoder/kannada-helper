@@ -6,6 +6,14 @@ import 'dart:typed_data';
 
 /// Reads Kannada text from an image. (Phase 3: Tesseract `kan`.)
 abstract class Ocr {
+  /// Whether the recognition data is on the device.
+  Future<bool> isReady();
+
+  /// One-time download of the recognition data.
+  /// [onProgress] gets bytes received and total bytes (null if unknown).
+  Future<void> prepare({void Function(int received, int? total)? onProgress});
+
+  /// Returns the text found in [image], an encoded PNG or JPEG.
   Future<String> read(Uint8List image);
 }
 

@@ -11,6 +11,7 @@ const _manifestPath = 'android/app/src/main/AndroidManifest.xml';
 const _permissions = [
   'android.permission.INTERNET', // one-time language pack download
   'android.permission.RECORD_AUDIO', // Speak mode
+  'android.permission.CAMERA', // Scan mode
   'android.permission.BLUETOOTH', // speech_to_text: Bluetooth headsets
   'android.permission.BLUETOOTH_ADMIN',
   'android.permission.BLUETOOTH_CONNECT',
@@ -22,7 +23,45 @@ const _queryActions = [
   'android.speech.RecognitionService', // Speak mode
 ];
 
+/// The camera plugin needs Android 7.0 (API 24) or newer.
+const _minSdk = 24;
+
 void main() {
+  _patchManifest();
+  _patchMinSdk();
+}
+
+/// Makes sure minSdk is at least [_minSdk] in android/app/build.gradle(.kts).
+void _patchMinSdk() {
+  for (final path in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
+    final file = File(path);
+    if (!file.existsSync()) continue;
+    var gradle = file.readAsStringSync();
+    if (gradle.contains('kannada_helper:minSdk')) {
+      stdout.writeln('$path: minSdk already patched.');
+      return;
+    }
+    final kts = path.endsWith('.kts');
+    final line = RegExp(r'^(\s*)minSdk(Version)?\s*=?\s*(.+)$', multiLine: true);
+    final match = line.firstMatch(gradle);
+    if (match == null) {
+      stderr.writeln('$path: no minSdk line found. Set it to $_minSdk by hand.');
+      return;
+    }
+    final indent = match.group(1)!;
+    final current = match.group(3)!.trim();
+    final replacement = kts
+        ? '${indent}minSdk = maxOf($_minSdk, $current) // kannada_helper:minSdk'
+        : '${indent}minSdkVersion Math.max($_minSdk, $current) // kannada_helper:minSdk';
+    gradle = gradle.replaceRange(match.start, match.end, replacement);
+    file.writeAsStringSync(gradle);
+    stdout.writeln('Patched $path: minSdk is now at least $_minSdk');
+    return;
+  }
+  stderr.writeln('No android/app/build.gradle(.kts) found.');
+}
+
+void _patchManifest() {
   final file = File(_manifestPath);
   if (!file.existsSync()) {
     stderr.writeln('Not found: $_manifestPath\n'

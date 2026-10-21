@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'engines/engines.dart';
 import 'engines/kannada_romanizer.dart';
 import 'engines/mlkit_translator.dart';
 import 'engines/platform_speech_to_text.dart';
 import 'engines/system_tts.dart';
+import 'engines/tesseract_ocr.dart';
 import 'services/language_packs.dart';
 import 'ui/home_screen.dart';
 import 'ui/setup_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Portrait only: keeps the camera, scan box and layout simple.
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(KannadaHelperApp(
     translator: MlKitTranslator(),
     tts: SystemTts(),
     romanizer: const KannadaRomanizer(),
     packs: LanguagePacks(),
     speech: PlatformSpeechToText(),
+    ocr: TesseractOcr(),
   ));
 }
 
@@ -28,6 +33,7 @@ class KannadaHelperApp extends StatefulWidget {
     required this.romanizer,
     required this.packs,
     required this.speech,
+    required this.ocr,
   });
 
   final Translator translator;
@@ -35,6 +41,7 @@ class KannadaHelperApp extends StatefulWidget {
   final Romanizer romanizer;
   final LanguagePacks packs;
   final SpeechToText speech;
+  final Ocr ocr;
 
   @override
   State<KannadaHelperApp> createState() => _KannadaHelperAppState();
@@ -81,6 +88,7 @@ class _KannadaHelperAppState extends State<KannadaHelperApp> {
           tts: widget.tts,
           romanizer: widget.romanizer,
           speech: widget.speech,
+          ocr: widget.ocr,
         ),
     };
 

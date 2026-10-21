@@ -108,7 +108,7 @@ Aim for **casual readable spelling** ("namaskara", "yeshtu"), not academic trans
 ## 6. Build phases
 
 ### Phase 0: Setup (½ day)
-- [ ] `flutter create kannada_helper`, run on your phone
+- [x] `flutter create kannada_helper`, run on your phone
 - [ ] Install the Kannada voice in Android TTS settings; test `flutter_tts` speaking "ನಮಸ್ಕಾರ"
 - [x] Define the 5 interfaces from §2
 
@@ -125,13 +125,13 @@ Aim for **casual readable spelling** ("namaskara", "yeshtu"), not academic trans
 - [x] Handle mic permission denial and silence timeouts
 
 ### Phase 3: Scan mode (2–3 days, the hard part)
-- [ ] Full-screen camera with a centered scan box
-- [ ] Image stream throttled to ~1 frame/sec; drop frames while OCR is busy (run OCR in an isolate)
-- [ ] Crop to box → grayscale → Tesseract `kan`
-- [ ] Only translate if the text **changed** and has ≥2 Kannada characters
-- [ ] Bottom card shows English + Hindi; keep the last good result (no flicker)
-- [ ] "Freeze" button: grab one sharp frame for better accuracy
-- [ ] Stop the camera stream when the app is backgrounded (battery)
+- [x] Full-screen camera with a centered scan box
+- [x] Image stream throttled to ~1 frame/sec; drop frames while OCR is busy (run OCR in an isolate)
+- [x] Crop to box → grayscale → Tesseract `kan`
+- [x] Only translate if the text **changed** and has ≥2 Kannada characters
+- [x] Bottom card shows English + Hindi; keep the last good result (no flicker)
+- [x] "Freeze" button: grab one sharp frame for better accuracy
+- [x] Stop the camera stream when the app is backgrounded (battery)
 
 ### Phase 4: Polish (1–2 days)
 - [ ] "Common phrases" tab: hand-curated top 50 (auto, shop, food, office). Machine translation is often too formal for street Kannada

@@ -3,11 +3,13 @@
 Personal offline Flutter app (Android) to understand and speak basic Kannada.
 One screen, three modes, no server, no API keys. See **PLAN.md** for the full plan.
 
-**Status: Phases 0–2 done.**
+**Status: Phases 0–3 done.**
 - **Type:** English or Hindi in → Kannada in English letters (big) + Kannada script + ▶️ audio.
 - **Speak:** tap the mic, speak English or Hindi → same result, played aloud automatically
   (toggle off with *Play Kannada automatically*).
-- **Scan** (Phase 3) shows a placeholder.
+- **Scan:** point the camera at Kannada text inside the box → English + Hindi meaning,
+  plus the Kannada in English letters with ▶️ audio. *Freeze* takes a steadier still photo;
+  the ⚡ button turns on the torch for dim menus.
 
 ---
 
@@ -21,8 +23,8 @@ cd kannada_helper
 # 1. Generate the Android platform folder (keeps the existing lib/ and test/)
 flutter create --platforms=android --project-name kannada_helper --org dev.ng .
 
-# 2. Add permissions (internet, microphone) + TTS/speech queries to AndroidManifest.xml
-#    Safe to re-run; already patched for Phase 1? Run it again for Phase 2.
+# 2. Add permissions (internet, mic, camera), TTS/speech queries and minSdk 24.
+#    Safe to re-run; run it again after each new phase.
 dart run tool/patch_android.dart
 
 # 3. Fetch packages and run the tests
@@ -48,6 +50,14 @@ Kannada voice is found.
   phone's speech/voice-typing settings.
 - The mic stops by itself after ~3 s of silence, or tap it again to stop.
 
+**Scan mode tips**
+- First visit to Scan asks to download the Kannada reading model (a few MB, once),
+  then asks for camera permission.
+- Works best on **printed** text: menus, bills, bus boards. Fancy signboard fonts and
+  handwriting often fail. Hold steady, fill the box, or tap **Freeze**.
+- On the emulator the camera is a virtual room or your Mac's webcam. Hold a printed
+  Kannada word up to the webcam, or test on the real phone.
+
 ### If the build complains
 - **minSdk errors:** set `minSdk = 21` (or higher) in `android/app/build.gradle(.kts)`.
 - **Package version conflicts:** run `flutter pub upgrade --major-versions`.
@@ -68,13 +78,17 @@ lib/
     mlkit_translator.dart       v1 Translator: Google ML Kit, on-device
     system_tts.dart             v1 TextToSpeech: phone's built-in TTS
     platform_speech_to_text.dart  v1 SpeechToText: phone's recognizer
+    tesseract_ocr.dart          v1 Ocr: Tesseract `kan`, model downloaded once
   services/
     language_packs.dart         one-time translation model download
-    to_kannada.dart             shared en/hi → kn step with cache (all modes use it)
+    to_kannada.dart             shared en/hi → kn step with cache (Type, Speak)
+    from_kannada.dart           kn → en + hi with cache (Scan)
+    scan_frame.dart             crop/rotate/contrast for the scan box (pure Dart)
   ui/
     home_screen.dart            the one screen: Type / Speak / Scan
     type_view.dart              Type mode
     speak_view.dart             Speak mode (mic → transcript → Kannada)
+    scan_view.dart              Scan mode (camera → OCR → English + Hindi)
     source_toggle.dart          English | हिंदी switch
     kannada_result.dart         ResultCard wired to romanizer + TTS
     setup_screen.dart           first-launch download screen
@@ -83,8 +97,11 @@ test/
   kannada_romanizer_test.dart   39 expectations for the romanizer
   widget_test.dart              ResultCard widget tests
   speak_view_test.dart          Speak flow with fake mic/translator/TTS
+  scan_frame_test.dart          scan box crop/rotation + Kannada text cleanup
+assets/
+  tessdata_config.json          required by the OCR plugin (empty on purpose)
 tool/
-  patch_android.dart            one-off AndroidManifest patcher
+  patch_android.dart            AndroidManifest + minSdk patcher (re-runnable)
 ```
 
 **Swapping engines:** the UI only depends on the interfaces in `engines.dart`.
@@ -105,7 +122,6 @@ and change one line in `main.dart`.
 
 ---
 
-## Next: Phase 3 (Scan mode)
-- Camera preview with a scan box, ~1 frame/sec
-- Tesseract `kan` OCR behind the `Ocr` interface, run off the UI thread
-- Kannada → English + Hindi result card, with a freeze button
+## Next: Phase 4 (Polish)
+- Common phrases tab: hand-curated top 50 for autos, shops, food, office
+- Recent translations, stored on the phone
