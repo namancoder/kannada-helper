@@ -51,8 +51,10 @@ Kannada voice is found.
 - The mic stops by itself after ~3 s of silence, or tap it again to stop.
 
 **Scan mode tips**
-- First visit to Scan asks to download the Kannada reading model (a few MB, once),
-  then asks for camera permission.
+- First visit to Scan asks to download Tesseract's Kannada model (a few MB, once),
+  then asks for camera permission. The second reader (IndicPhotoOCR's PARSeq, 35 MB)
+  is bundled in the app; each word goes to whichever reader is more confident.
+- Debug builds show what was read, by which engine, and how long it took.
 - Works best on **printed** text: menus, bills, bus boards. Fancy signboard fonts and
   handwriting often fail. Hold steady, fill the box, or tap **Freeze**.
 - On the emulator the camera is a virtual room or your Mac's webcam. Hold a printed
@@ -78,7 +80,7 @@ lib/
     mlkit_translator.dart       v1 Translator: Google ML Kit, on-device
     system_tts.dart             v1 TextToSpeech: phone's built-in TTS
     platform_speech_to_text.dart  v1 SpeechToText: phone's recognizer
-    tesseract_ocr.dart          v1 Ocr: Tesseract `kan` via a native bridge, model downloaded once
+    hybrid_ocr.dart             Ocr: Tesseract finds words + PARSeq reads them (best of both)
   services/
     language_packs.dart         one-time translation model download
     to_kannada.dart             shared en/hi → kn step with cache (Type, Speak)
@@ -98,9 +100,14 @@ test/
   widget_test.dart              ResultCard widget tests
   speak_view_test.dart          Speak flow with fake mic/translator/TTS
   scan_frame_test.dart          scan box crop/rotation + Kannada text cleanup
+models/
+  kannada_parseq_int8.onnx      PARSeq Kannada word reader (35 MB, NOT in git:
+                                build it with tool/ocr_bench/export_onnx.py)
+  kannada_parseq_charset.txt    its output classes
 tool/android/
-  MainActivity.kt               native OCR bridge (Tesseract4Android), copied
-                                into android/ by patch_android.dart
+  MainActivity.kt               native OCR bridge (Tesseract4Android + ONNX
+                                Runtime), copied into android/ by patch_android.dart
+tool/ocr_bench/                 OCR benchmarks and the PARSeq ONNX export
 tool/
   patch_android.dart            Android setup: manifest, minSdk, OCR bridge (re-runnable)
 ```

@@ -25,3 +25,19 @@ word already cropped; after mapping digit zero after a letter to the anusvara):
 Synthetic text is easier than real photos; re-run on real phone samples.
 Model input: RGB 32x128, scaled to [-1, 1]. Output: logits [1, 26, 100];
 argmax per position, stop at class 0 (end). Common confusion: ಂ read as ೦.
+
+## End-to-end (scan box, several words and lines): `hybrid_bench.py`
+
+120 grayscale, contrast-stretched scan-box images (like the app), 1-2 lines of
+1-3 words, computer-rendered fonts:
+
+| Pipeline | Whole text right | Words right | Characters |
+|---|---|---|---|
+| Tesseract alone (psm 6) | 90% | 96% | 98% |
+| Tesseract boxes + PARSeq for every word | 82% | 93% | 98% |
+| **Best of both** (per word, higher confidence wins; what the app does) | 85% | 95% | 98% |
+
+On rendered fonts Tesseract is strong (it was trained on rendered text). On the
+real-photo BSTD benchmark the order flips (Kannada words: PARSeq 60% vs
+Tesseract 12%), so the app keeps both and picks per word. Re-check with real
+phone samples before tuning.

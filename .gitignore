@@ -27,3 +27,6 @@ key.properties
 *.onnx
 *.onnx.data
 *.traineddata
+
+# Python
+__pycache__/

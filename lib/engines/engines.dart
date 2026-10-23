@@ -19,12 +19,15 @@ abstract class Ocr {
 
 /// Text from OCR plus how sure the engine is (0-100).
 class OcrResult {
-  const OcrResult(this.text, this.confidence);
+  const OcrResult(this.text, this.confidence, {this.debug});
 
   final String text;
 
   /// Mean word confidence. Random shapes read as letters score low.
   final int confidence;
+
+  /// Engine details for the debug strip (which engine won, timing, raw reads).
+  final String? debug;
 }
 
 /// One piece of recognized speech.

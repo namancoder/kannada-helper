@@ -6,7 +6,7 @@ import 'engines/kannada_romanizer.dart';
 import 'engines/mlkit_translator.dart';
 import 'engines/platform_speech_to_text.dart';
 import 'engines/system_tts.dart';
-import 'engines/tesseract_ocr.dart';
+import 'engines/hybrid_ocr.dart';
 import 'services/language_packs.dart';
 import 'ui/home_screen.dart';
 import 'ui/setup_screen.dart';
@@ -21,7 +21,7 @@ Future<void> main() async {
     romanizer: const KannadaRomanizer(),
     packs: LanguagePacks(),
     speech: PlatformSpeechToText(),
-    ocr: TesseractOcr(),
+    ocr: HybridOcr(),
   ));
 }
 

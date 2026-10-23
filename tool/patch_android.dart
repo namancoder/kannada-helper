@@ -3,7 +3,7 @@
 //   dart run tool/patch_android.dart
 //
 // Sets up android/ for the app: manifest permissions and queries, minSdk,
-// and the native OCR bridge (MainActivity.kt + Tesseract4Android).
+// and the native OCR bridge (MainActivity.kt + Tesseract4Android + ONNX Runtime).
 // Each change is made only if missing, so it's safe to run any number of times.
 import 'dart:io';
 
@@ -27,8 +27,13 @@ const _queryActions = [
 /// The camera plugin needs Android 7.0 (API 24) or newer.
 const _minSdk = 24;
 
-/// Tesseract4Android, used by the native OCR bridge (Scan mode).
-const _tessDependency = 'cz.adaptech.tesseract4android:tesseract4android:4.9.0';
+/// Native libraries used by the OCR bridge (Scan mode).
+const _nativeDependencies = [
+  // Tesseract: finds words, reads clean printed text.
+  'cz.adaptech.tesseract4android:tesseract4android:4.9.0',
+  // ONNX Runtime: runs the IndicPhotoOCR PARSeq word reader.
+  'com.microsoft.onnxruntime:onnxruntime-android:1.29.0',
+];
 
 void main() {
   _patchManifest();
@@ -36,7 +41,7 @@ void main() {
   _patchOcrBridge();
 }
 
-/// Installs the native OCR bridge: JitPack repo, Tesseract4Android dependency
+/// Installs the native OCR bridge: JitPack repo, native dependencies
 /// and MainActivity.kt from tool/android/ (with the app's package name).
 void _patchOcrBridge() {
   // 1. MainActivity.kt
@@ -87,17 +92,24 @@ void _patchOcrBridge() {
     stderr.writeln('android/build.gradle.kts not found; add the JitPack repo by hand.');
   }
 
-  // 3. Dependency
+  // 3. Dependencies
   final appGradle = File('android/app/build.gradle.kts');
   if (appGradle.existsSync()) {
-    final text = appGradle.readAsStringSync();
-    if (!text.contains('tesseract4android')) {
-      appGradle.writeAsStringSync('${text.trimRight()}\n\n'
-          'dependencies {\n    implementation("$_tessDependency")\n}\n');
-      stdout.writeln('Patched ${appGradle.path}: + Tesseract4Android');
+    var text = appGradle.readAsStringSync();
+    for (final dep in _nativeDependencies) {
+      final artifact = dep.substring(0, dep.lastIndexOf(':'));
+      if (text.contains(artifact)) continue;
+      final line = '    implementation("$dep")';
+      final block = RegExp(r'^dependencies\s*\{', multiLine: true).firstMatch(text);
+      text = block == null
+          ? '${text.trimRight()}\n\ndependencies {\n$line\n}\n'
+          : '${text.substring(0, block.end)}\n$line${text.substring(block.end)}';
+      stdout.writeln('Patched ${appGradle.path}: + $dep');
     }
+    appGradle.writeAsStringSync(text);
   } else {
-    stderr.writeln('android/app/build.gradle.kts not found; add $_tessDependency by hand.');
+    stderr.writeln('android/app/build.gradle.kts not found; add these by hand: '
+        '${_nativeDependencies.join(', ')}');
   }
 }
 

@@ -5,17 +5,19 @@ import 'package:flutter/services.dart';
 
 import 'engines.dart';
 
-/// v1 OCR engine: Tesseract with the Kannada model, fully on-device.
+/// OCR engine for Scan mode, fully on-device:
+///  * Tesseract (Kannada model, downloaded once) finds where the words are and
+///    reads them too; it's good on clean printed fonts.
+///  * IndicPhotoOCR's PARSeq model (bundled in the app as
+///    `models/kannada_parseq_int8.onnx`) reads each word as well; it's much
+///    better on real photos and signboards.
+///  * Per word, whichever engine is more confident wins.
 /// (Google ML Kit can't read Kannada script, so it isn't an option here.)
 ///
-/// Talks to a small native bridge in `android/.../MainActivity.kt` that wraps
-/// Tesseract4Android. (The `flutter_tesseract_ocr` plugin was dropped: its
-/// Android build uses `jcenter()`, which Gradle 9 removed.)
-///
-/// The Kannada model (`kan.traineddata`, "fast" variant, a few MB) is
-/// downloaded once from the official tesseract-ocr GitHub repo, not bundled.
-class TesseractOcr implements Ocr {
-  TesseractOcr({
+/// The heavy lifting is native: `android/.../MainActivity.kt`, source of truth
+/// in `tool/android/MainActivity.kt`.
+class HybridOcr implements Ocr {
+  HybridOcr({
     this.modelUrl =
         'https://github.com/tesseract-ocr/tessdata_fast/raw/main/kan.traineddata',
   });
@@ -91,14 +93,19 @@ class TesseractOcr implements Ocr {
     _slot = 1 - _slot;
     final file = File('${Directory.systemTemp.path}/kh_scan_$_slot.png');
     await file.writeAsBytes(image, flush: true);
-    final result = await _channel.invokeMapMethod<String, Object?>('read', {
+    final r = await _channel.invokeMapMethod<String, Object?>('readWords', {
       'path': file.path,
       'lang': _language,
       'psm': _psmSingleBlock,
     });
-    return OcrResult(
-      (result?['text'] as String?) ?? '',
-      (result?['confidence'] as int?) ?? 0,
-    );
+    String str(String key) => (r?[key] as String?) ?? '';
+    int number(String key) => (r?[key] as num?)?.toInt() ?? 0;
+    final debug = [
+      '${str('engine')} · ${number('ms')} ms',
+      if (str('parseqText').isNotEmpty) 'PARSeq: ${str('parseqText')}',
+      'Tesseract (${number('tessConfidence')}): ${str('tessText')}',
+      if (str('note').isNotEmpty) str('note'),
+    ].join('\n');
+    return OcrResult(str('text'), number('confidence'), debug: debug);
   }
 }

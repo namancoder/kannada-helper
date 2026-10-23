@@ -266,7 +266,10 @@ class _ScanViewState extends State<ScanView> with WidgetsBindingObserver {
       if (kDebugMode) {
         setState(() {
           _debugPng = png;
-          _debugRaw = ocr.text.trim().replaceAll('\n', ' ⏎ ');
+          _debugRaw = [
+            'Result: ${ocr.text.trim().replaceAll('\n', ' ⏎ ')}',
+            if (ocr.debug != null) ocr.debug!,
+          ].join('\n');
           _debugConfidence = ocr.confidence;
         });
       }
@@ -770,7 +773,7 @@ class _DebugStrip extends StatelessWidget {
               child: Text(
                 'DEBUG  confidence $confidence/$threshold ${ok ? '✓' : '✗'}\n'
                 '${raw.isEmpty ? '(no text)' : raw}',
-                maxLines: 3,
+                maxLines: 6,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: ok ? colors.onSurface : colors.onSurfaceVariant),

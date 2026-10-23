@@ -26,3 +26,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # Kannada word reader for Scan (IndicPhotoOCR PARSeq, int8 ONNX, ~35 MB).
+    # Not in git (*.onnx is ignored): make it with tool/ocr_bench/export_onnx.py
+    # or copy kannada_parseq_int8.onnx into models/.
+    - models/kannada_parseq_int8.onnx
+    - models/kannada_parseq_charset.txt
